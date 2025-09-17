@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 from common.config import get_config
 from common.progress import ScraperProgress
 from cslb.collector import CSLBCollector
+from vk_api_utils import SlackNotifier
 
 
 def setup_logging(config):
@@ -38,28 +39,46 @@ def setup_logging(config):
     logging.getLogger("requests").setLevel(logging.WARNING)
 
 
-def run_cslb():
+def run_cslb(slack=None):
     """Run CSLB collector."""
     print("\n" + "="*70)
     print("  CSLB COLLECTOR")
     print("="*70)
 
+    if slack:
+        slack.notify_progress("Starting CSLB collector...")
+
     collector = CSLBCollector()
-    return collector.run()
+    success = collector.run()
+
+    if slack:
+        if success:
+            slack.notify_progress("✅ CSLB collector completed successfully")
+        else:
+            slack.notify_warning("⚠️ CSLB collector failed")
+
+    return success
 
 
-def run_dca():
+def run_dca(slack=None):
     """Run DCA collector."""
     print("\n" + "="*70)
     print("  DCA COLLECTOR")
     print("="*70)
 
+    if slack:
+        slack.notify_progress("Starting DCA collector...")
+
     # TODO: Implement DCA collector
     print("DCA collector not yet implemented")
+
+    if slack:
+        slack.notify_warning("⚠️ DCA collector not yet implemented")
+
     return False
 
 
-def run_all():
+def run_all(slack=None):
     """Run all collectors."""
     print("\n" + "="*70)
     print("  RUNNING ALL CALIFORNIA COLLECTORS")
@@ -67,8 +86,8 @@ def run_all():
     print("="*70)
 
     results = {
-        'CSLB': run_cslb(),
-        'DCA': run_dca()
+        'CSLB': run_cslb(slack),
+        'DCA': run_dca(slack)
     }
 
     # Print summary
@@ -102,6 +121,12 @@ def main():
         action="store_true",
         help="Enable verbose output"
     )
+    parser.add_argument(
+        "--slack",
+        default="on",
+        choices=["on", "off"],
+        help="Enable/disable Slack notifications (default: on)"
+    )
 
     args = parser.parse_args()
 
@@ -113,14 +138,37 @@ def main():
     # Set up logging
     setup_logging(config)
 
+    # Set up Slack notifications
+    slack = None
+    if args.slack.lower() != "off":
+        slack = SlackNotifier("California Collectors")
+        slack.notify_start({
+            "Collector": args.collector.upper(),
+            "Time": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        })
+
     # Run selected collector
     success = False
-    if args.collector == "cslb":
-        success = run_cslb()
-    elif args.collector == "dca":
-        success = run_dca()
-    elif args.collector == "all":
-        success = run_all()
+    try:
+        if args.collector == "cslb":
+            success = run_cslb(slack)
+        elif args.collector == "dca":
+            success = run_dca(slack)
+        elif args.collector == "all":
+            success = run_all(slack)
+
+        # Send final notification
+        if slack:
+            if success:
+                slack.notify_success("California collectors completed successfully")
+            else:
+                slack.notify_warning("California collectors completed with errors")
+
+    except Exception as e:
+        logging.error(f"Fatal error: {e}", exc_info=True)
+        if slack:
+            slack.notify_error(f"California collectors failed", exception=e)
+        success = False
 
     sys.exit(0 if success else 1)
 
