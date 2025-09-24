@@ -38,7 +38,14 @@ data/temp/*
 !data/temp/.gitkeep
 !logs/.gitkeep
 
-# Config with sensitive data
+# Allow essential config and reference data
+!config/*.json
+!config/*.csv
+!config/agency_map_fixes/
+!inputs/*.csv
+!reference/*.json
+
+# Block only sensitive config
 config/credentials.ini
 config/local.ini
 
